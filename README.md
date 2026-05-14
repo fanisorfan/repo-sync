@@ -1,8 +1,9 @@
-# repo-sync — Customer Repo Toolkit
+# repo-sync 
+Customer Repo Toolkit
 
 A developer toolkit for working on any customer's private GitHub repo while keeping your internal work completely private. Works for any number of customers. Each gets their own isolated working repo.
 
-The customer only ever sees clean, squashed deliveries — never your commit history, branch names, or internal tooling.
+The customer only ever sees clean, squashed deliveries never your commit history, branch names, or internal tooling.
 
 ---
 
@@ -48,7 +49,7 @@ Each customer project ends up looking like this:
 
 ## Requirements
 
-Install the GitHub CLI once — setup uses it to create repos automatically:
+Install the GitHub CLI once setup uses it to create repos automatically:
 
 ```bash
 brew install gh
@@ -78,7 +79,7 @@ Then automatically:
 - Installs the scripts and monitor workflow
 - Pushes everything to your internal repo
 
-Run it again any time to start over from scratch — it wipes and rebuilds cleanly.
+Run it again any time to start over from scratch it wipes and rebuilds cleanly.
 
 ---
 
@@ -107,7 +108,7 @@ For each customer project, add it as a secret in your internal repo:
 
 ### Working on code
 
-Work on `internal-main` as you normally would. Commit freely — the customer never sees individual commits.
+Work on `internal-main` as you normally would. Commit freely the customer never sees individual commits.
 
 ```bash
 git add .
@@ -146,18 +147,18 @@ Then squashes all your internal commits into one clean commit, strips internal t
 
 ## Working with multiple customers
 
-Each customer is a completely separate folder and repo — they're fully isolated from each other. The toolkit is shared and reused for every customer.
+Each customer is a completely separate folder and repo they're fully isolated from each other. The toolkit is shared and reused for every customer.
 
-The scripts inside each customer folder are pre-configured for that specific customer by `setup.sh`, so you never need to think about which customer you're targeting — just `cd` into the right folder and run the script.
+The scripts inside each customer folder are pre-configured for that specific customer by `setup.sh`, so you never need to think about which customer you're targeting just `cd` into the right folder and run the script.
 
 ---
 
 ## Rules
 
-- **Never push `internal-main` directly to the customer** — always use `export-to-customer.sh`
-- **Never commit to `customer-main`** — it's a read-only mirror of their repo, updated automatically
+- **Never push `internal-main` directly to the customer** always use `export-to-customer.sh`
+- **Never commit to `customer-main`** it's a read-only mirror of their repo, updated automatically
 - **Always work on `internal-main`** or feature branches off it
-- The `scripts/` and `.github/` folders never reach the customer — they're stripped on export
+- The `scripts/` and `.github/` folders never reach the customer they're stripped on export
 
 ---
 
@@ -165,8 +166,8 @@ The scripts inside each customer folder are pre-configured for that specific cus
 
 | Problem | Fix |
 |---|---|
-| Setup fails mid-way | Run `setup.sh` again — it starts clean |
+| Setup fails mid-way | Run `setup.sh` again it starts clean |
 | Monitor workflow fails with "no token" | Add `REPO_TOKEN` secret to your internal repo |
-| Export says "nothing to commit" | You have no code changes yet — only internal tooling was added |
+| Export says "nothing to commit" | You have no code changes yet only internal tooling was added |
 | Pull opens vim for merge message | Type `:wq` and press Enter to accept |
 | Customer can't see your PR | Make sure you pushed to their repo, not your internal one |
