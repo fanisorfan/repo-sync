@@ -158,7 +158,21 @@ The scripts inside each customer folder are pre-configured for that specific cus
 - **Never push `internal-main` directly to the customer** always use `export-to-customer.sh`
 - **Never commit to `customer-main`** it's a read-only mirror of their repo, updated automatically
 - **Always work on `internal-main`** or feature branches off it
-- The `scripts/` and `.github/` folders never reach the customer they're stripped on export
+- The following are automatically stripped on every export and never reach the customer:
+
+```
+scripts/
+.github/workflows/monitor-customer.yml
+.cursor/
+.agents/
+.notes/
+.cursorrules
+.cursorignore
+.junie/
+.tanstack/
+```
+
+To add more paths, edit the `EXCLUDE_PATHS` array at the top of `scripts/export-to-customer.sh`.
 
 ---
 

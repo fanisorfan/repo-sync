@@ -2,8 +2,8 @@
 # export-to-customer.sh
 # Squashes your internal work into one clean commit and pushes it
 # to the customer repo as a branch ready for a PR.
-# Internal files (scripts/ and .github/workflows/monitor-customer.yml)
-# are excluded — the customer never sees them.
+# Internal tooling, IDE config, and agent directories are stripped
+# automatically — the customer never sees them.
 
 set -euo pipefail
 
@@ -12,6 +12,20 @@ CUSTOMER_URL="CUSTOMER_URL_PLACEHOLDER"
 CUSTOMER_BRANCH="${CUSTOMER_BRANCH:-main}"
 INTERNAL_BRANCH="${INTERNAL_BRANCH:-internal-main}"
 EXPORT_BRANCH="export/customer-$(date +%Y%m%d-%H%M%S)"
+
+# ── Files and folders to exclude from the export ─────────────────────────
+# Internal tooling and IDE/agent config that should never reach the customer
+EXCLUDE_PATHS=(
+  "scripts"
+  ".github/workflows/monitor-customer.yml"
+  ".cursor"
+  ".agents"
+  ".notes"
+  ".cursorrules"
+  ".cursorignore"
+  ".junie"
+  ".tanstack"
+)
 
 # ── Ask for required inputs ───────────────────────────────────────────────
 echo ""
@@ -45,15 +59,18 @@ git fetch "$CUSTOMER_REMOTE"
 echo "[2/5] Creating clean export branch..."
 git checkout -B "$EXPORT_BRANCH" "$CUSTOMER_REMOTE/$CUSTOMER_BRANCH"
 
-# ── 3. Squash — use diff/apply instead of merge to avoid untracked conflicts
+# ── 3. Apply changes ──────────────────────────────────────────────────────
 echo "[3/5] Applying your changes..."
 git diff "$CUSTOMER_REMOTE/$CUSTOMER_BRANCH".."$INTERNAL_BRANCH" | git apply --index 2>/dev/null || \
   git merge --squash "$INTERNAL_BRANCH" --allow-unrelated-histories
 
 # ── 4. Exclude internal files from the commit ────────────────────────────
 echo "[4/5] Excluding internal files..."
-git reset HEAD scripts/ .github/workflows/monitor-customer.yml 2>/dev/null || true
-git checkout -- scripts/ .github/workflows/monitor-customer.yml 2>/dev/null || true
+for path in "${EXCLUDE_PATHS[@]}"; do
+  git reset HEAD "$path" 2>/dev/null || true
+  git checkout -- "$path" 2>/dev/null || true
+  echo "    excluded: $path"
+done
 
 git commit -m "$COMMIT_MESSAGE"
 
