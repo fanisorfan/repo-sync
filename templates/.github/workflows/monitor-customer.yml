@@ -1,69 +1,34 @@
-name: Monitor customer repo
-
-# Runs automatically every 6 hours.
-# Checks if the customer pushed any new changes to their repo.
-# If yes, opens a PR on your internal repo so you can review and decide
-# whether to pull their changes in. Nothing is merged automatically.
-#
-# Required secret:
-#   REPO_TOKEN   classic token with repo scope
+name: Sync Mirror
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: '0 * * * *'   # every hour — adjust as needed
   workflow_dispatch:
 
 jobs:
-  monitor:
+  sync:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout internal repo
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.REPO_TOKEN }}
 
-      - name: Configure Git
+      - name: Setup SSH
         run: |
-          git config user.name "sync-bot"
-          git config user.email "sync-bot@noreply.local"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          # Uncomment for other hosts:
+          # ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
+          # ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
 
-      - name: Fetch customer repo
+      - name: Configure git
         run: |
-          CUSTOMER_HTTPS_URL=$(echo "CUSTOMER_URL_PLACEHOLDER" | sed 's|git@github.com:|https://github.com/|' | sed 's|\.git$||').git
-          git remote add customer "https://x-access-token:${{ secrets.REPO_TOKEN }}@${CUSTOMER_HTTPS_URL#https://}"
-          git fetch customer
+          git config --global user.email "mirror-bot@users.noreply.github.com"
+          git config --global user.name "Mirror Bot"
+          git remote set-url origin git@github.com:${{ github.repository }}.git
 
-      - name: Update customer tracking branch
-        run: |
-          git checkout -B customer-main customer/main
-          git push origin customer-main --force-with-lease
-
-      - name: Open PR if customer has new changes
-        env:
-          GH_TOKEN: ${{ secrets.REPO_TOKEN }}
-        run: |
-          # Compare actual file content, ignoring internal tooling files
-          DIFF=$(git diff origin/internal-main..customer-main -- . ':(exclude)scripts' ':(exclude).github/workflows/monitor-customer.yml')
-
-          if [ -z "$DIFF" ]; then
-            echo "No new changes from customer."
-            exit 0
-          fi
-
-          EXISTING=$(gh pr list --base internal-main --head customer-main --state open --json number --jq '.[0].number')
-          if [ -n "$EXISTING" ]; then
-            echo "PR #$EXISTING already open. Skipping."
-            exit 0
-          fi
-
-          echo "New changes from customer:"
-          git diff --stat origin/internal-main..customer-main -- . ':(exclude)scripts' ':(exclude).github/workflows/monitor-customer.yml'
-
-          gh pr create \
-            --base internal-main \
-            --head customer-main \
-            --title "Customer pushed changes — $(date +%Y-%m-%d)" \
-            --body "New changes detected in the customer repo. Review the diff and merge if you want to incorporate them." \
-            || echo "Could not create PR — branches may already be in sync at commit level. No action needed."
+      - name: Run sync
+        run: bash scripts/pull-from-customer.sh

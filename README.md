@@ -11,96 +11,73 @@ The customer only ever sees clean, squashed deliveries never your commit history
 
 For each customer you work with, you maintain:
 
-- A **private internal GitHub repo** (your working space, fully private)
-- A **local working folder** cloned from the customer, rewired to your internal repo
+- A **private internal Git repo** (your working space, fully private)
 - Two git remotes: `origin` → your internal repo, `customer` → their repo
 
-You work freely on `internal-main`. A GitHub Action monitors the customer's repo every 6 hours and opens a PR if they push something. When you're ready to deliver, one script squashes your work into a single clean commit and pushes it to them.
+You work freely on `main`. A GitHub Action monitors the customer's repo every hour and pulls their changes to a `mirror` branch. When you're ready to deliver, one script squashes your work into a single clean commit and pushes it to them.
 
 ---
 
 ## Toolkit structure
 
-Keep this folder somewhere permanent. One toolkit, works for every customer.
+Keep `setup.sh` somewhere permanent. It works for every customer.
 
 ```
 repo-sync/
-├── setup.sh                          ← run once per customer
-└── templates/                        ← don't touch these
-    ├── pull-from-customer.sh
-    ├── export-to-customer.sh
-    └── .github/workflows/
-        └── monitor-customer.yml
+└── setup.sh                          ← run once per customer
 ```
 
 Each customer project ends up looking like this:
 
 ```
-<customer-repo-name>/
+<your-internal-repo>/
 ├── scripts/
 │   ├── pull-from-customer.sh         ← pull their changes in manually
-│   └── export-to-customer.sh        ← deliver your work to them
+│   └── export-to-customer.sh         ← deliver your work to them
 ├── .github/workflows/
-│   └── monitor-customer.yml          ← auto-monitors their repo every 6h
-└── ... their code ...
-```
-
----
-
-## Requirements
-
-Install the GitHub CLI once setup uses it to create repos automatically:
-
-```bash
-brew install gh
-gh auth login
+│   └── sync-mirror.yml               ← auto-monitors their repo every hour
+└── ... your code ...
 ```
 
 ---
 
 ## Starting a new customer project
 
-Go to whatever folder you want the project to live in, then run setup:
+1. Create a new private repository for your work (e.g. on GitHub, GitLab) and clone it locally.
+2. Inside your local repository, run the setup script:
 
 ```bash
 /path/to/repo-sync/setup.sh
 ```
 
-It asks for one thing:
+It asks for:
 
 ```
-Customer repo URL (SSH or HTTPS): https://github.com/acme-org/backend.git
+Customer repo SSH URL (e.g. git@github.com:org/repo.git):
 ```
 
 Then automatically:
-- Creates a private GitHub repo under your account
-- Clones the customer's codebase as the starting point
-- Creates `internal-main` as your working branch
-- Installs the scripts and monitor workflow
-- Pushes everything to your internal repo
+- Adds the customer's repo as a remote (`customer`)
+- Fetches and mirrors their `main` branch to your `mirror` branch
+- Installs the sync scripts and GitHub Action workflow
+- Asks you to commit and push the new tooling to your remote
 
-Run it again any time to start over from scratch it wipes and rebuilds cleanly.
+> **Note**: This toolkit is SSH-only. Make sure your remotes use `git@...` URLs.
 
 ---
 
-## GitHub token (once per account, works for all customers)
+## Authentication for the GitHub Action
 
-Create one classic token that covers all your customer repos:
+To allow the GitHub Action to pull from the customer's repository and automatically update the mirror, add an SSH private key as a repository secret:
 
-1. GitHub → profile picture → **Settings**
-2. **Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
-3. Note: `repo-sync`, Expiration: 1 year, Scope: tick **`repo`**
-4. Generate and copy it
-
-For each customer project, add it as a secret in your internal repo:
-→ **Settings → Secrets and variables → Actions → New repository secret**
+1. Generate an SSH key pair (or use an existing one that has read access to the customer's repo).
+2. Give the public key to the customer so they can add it as a Deploy Key (or add it to a machine user account).
+3. Add the private key as a secret in your internal repo:
+   → **Settings → Secrets and variables → Actions → New repository secret**
 
 | Name | Value |
 |---|---|
-| `REPO_TOKEN` | your classic token |
-
-> Ask each customer to add you as a collaborator on their repo so your token can read it:
-> their repo → **Settings → Collaborators → Add people** → your GitHub username
+| `SSH_PRIVATE_KEY` | your private SSH key contents |
 
 ---
 
@@ -108,25 +85,23 @@ For each customer project, add it as a secret in your internal repo:
 
 ### Working on code
 
-Work on `internal-main` as you normally would. Commit freely the customer never sees individual commits.
+Work on `main` as you normally would. Commit freely the customer never sees individual commits.
 
 ```bash
 git add .
 git commit -m "implement feature"
-git push origin internal-main
+git push origin main
 ```
 
 ### Pulling customer changes
 
-The monitor runs every 6 hours. If they pushed something, a PR appears on your internal repo. Review and merge it if you need their changes.
+The monitor runs every hour. If they pushed something, the Action will automatically pull it to your `mirror` branch.
 
 To pull immediately without waiting:
 
 ```bash
 ./scripts/pull-from-customer.sh
 ```
-
-Shows incoming commits, asks for a merge message, merges and pushes.
 
 ### Delivering to the customer
 
@@ -137,39 +112,29 @@ Shows incoming commits, asks for a merge message, merges and pushes.
 Prompts:
 
 ```
-Target branch name (e.g. feature/delivery-2026-05-14): feature/auth-implementation
+Target branch on customer repo (e.g. feature/delivery-2026-05-14): feature/auth-implementation
 Commit message (what the customer will see): Implement authentication flow
 ```
 
-Then squashes all your internal commits into one clean commit, strips internal tooling, and pushes to the customer's repo. Go to their GitHub and open a PR from that branch.
-
----
-
-## Working with multiple customers
-
-Each customer is a completely separate folder and repo they're fully isolated from each other. The toolkit is shared and reused for every customer.
-
-The scripts inside each customer folder are pre-configured for that specific customer by `setup.sh`, so you never need to think about which customer you're targeting just `cd` into the right folder and run the script.
+Then it creates a clean branch from the customer's head, squashes all your work into one commit, strips internal tooling, and pushes to the customer's repo. Go to their repository and open a PR from that branch.
 
 ---
 
 ## Rules
 
-- **Never push `internal-main` directly to the customer** always use `export-to-customer.sh`
-- **Never commit to `customer-main`** it's a read-only mirror of their repo, updated automatically
-- **Always work on `internal-main`** or feature branches off it
+- **Never push `main` directly to the customer** always use `export-to-customer.sh`
+- **Never commit to `mirror`** it's a read-only mirror of their repo
+- **Always work on `main`** or feature branches off it
 - The following are automatically stripped on every export and never reach the customer:
 
 ```
 scripts/
-.github/workflows/monitor-customer.yml
+.github/workflows/sync-mirror.yml
 .cursor/
 .agents/
 .notes/
 .cursorrules
 .cursorignore
-.junie/
-.tanstack/
 ```
 
 To add more paths, edit the `EXCLUDE_PATHS` array at the top of `scripts/export-to-customer.sh`.
@@ -180,8 +145,7 @@ To add more paths, edit the `EXCLUDE_PATHS` array at the top of `scripts/export-
 
 | Problem | Fix |
 |---|---|
-| Setup fails mid-way | Run `setup.sh` again it starts clean |
-| Monitor workflow fails with "no token" | Add `REPO_TOKEN` secret to your internal repo |
+| Monitor workflow fails with SSH error | Ensure `SSH_PRIVATE_KEY` is set correctly and the public key has read access to the customer repo |
 | Export says "nothing to commit" | You have no code changes yet only internal tooling was added |
-| Pull opens vim for merge message | Type `:wq` and press Enter to accept |
 | Customer can't see your PR | Make sure you pushed to their repo, not your internal one |
+
